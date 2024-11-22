@@ -30,17 +30,28 @@ struct ContentView: View {
 
     let formatter = NumberFormatter()
     var body: some View {
+        let testSamples = SampleBuffer(
+            samples: Array(repeating: Float(0.5), count: 1024))  // Midline samples
+
         VStack {
             ZStack(alignment: .leading) {
-                Waveform(samples: model.samples).foregroundColor(.cyan)
+                Waveform(
+                    samples: model.samples,
+//                    samples: testSamples,
+                    audioDuration: 120.0)
+                    .foregroundColor(.cyan)
                     .padding(.vertical, 5)
                 MinimapView(start: $start, length: $length)
             }
             .frame(height: 100)
             .padding()
-            Waveform(samples: model.samples,
-                     start: Int(start * Double(model.samples.count - 1)),
-                     length: Int(length * Double(model.samples.count)))
+            Waveform(
+                samples: model.samples,
+//                samples: testSamples,
+                start: Int(start * Double(model.samples.count - 1)),
+                length: Int(length * Double(model.samples.count)),
+                audioDuration: 120.0
+            )
             .foregroundColor(.blue)
         }
         .padding()

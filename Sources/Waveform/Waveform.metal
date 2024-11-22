@@ -71,3 +71,12 @@ fragment half4 waveform_frag(FragIn in   [[ stage_in ]],
     return color;
 
 }
+
+vertex float4 vertex_main(const device float4* vertices [[buffer(0)]], uint vertexID [[vertex_id]]) {
+    return vertices[vertexID];
+}
+
+fragment float4 fragment_main() {
+    return float4(0.0, 1.0, 0.0, 1.0); // Green color
+//    return float4(1.0, 0.0, 0.0, 1.0); // Red color
+}

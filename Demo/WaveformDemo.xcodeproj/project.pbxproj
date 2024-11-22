@@ -3,11 +3,13 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		29D479382A13DBED0033DF90 /* Piano.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 29D479372A13DBEC0033DF90 /* Piano.mp3 */; };
+		5FA56F982CEF161700245123 /* Waveform in Frameworks */ = {isa = PBXBuildFile; productRef = 5FA56F972CEF161700245123 /* Waveform */; };
+		5FA56F9B2CEF164C00245123 /* Waveform in Frameworks */ = {isa = PBXBuildFile; productRef = 5FA56F9A2CEF164C00245123 /* Waveform */; };
 		F130C47828EBF1390017B2AF /* MinimapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F130C47728EBF1390017B2AF /* MinimapView.swift */; };
 		F1A202B428DEA41E007CD919 /* WaveformDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A202B328DEA41E007CD919 /* WaveformDemoApp.swift */; };
 		F1A202B628DEA41E007CD919 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A202B528DEA41E007CD919 /* ContentView.swift */; };
@@ -36,6 +38,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				F1A202C628DEA96C007CD919 /* Waveform in Frameworks */,
+				5FA56F9B2CEF164C00245123 /* Waveform in Frameworks */,
+				5FA56F982CEF161700245123 /* Waveform in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -116,6 +120,8 @@
 			name = WaveformDemo;
 			packageProductDependencies = (
 				F1A202C528DEA96C007CD919 /* Waveform */,
+				5FA56F972CEF161700245123 /* Waveform */,
+				5FA56F9A2CEF164C00245123 /* Waveform */,
 			);
 			productName = WaveformDemo;
 			productReference = F1A202B028DEA41E007CD919 /* WaveformDemo.app */;
@@ -145,6 +151,9 @@
 				Base,
 			);
 			mainGroup = F1A202A728DEA41E007CD919;
+			packageReferences = (
+				5FA56F992CEF164C00245123 /* XCLocalSwiftPackageReference "../../Waveform" */,
+			);
 			productRefGroup = F1A202B128DEA41E007CD919 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -386,7 +395,22 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		5FA56F992CEF164C00245123 /* XCLocalSwiftPackageReference "../../Waveform" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../Waveform;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		5FA56F972CEF161700245123 /* Waveform */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Waveform;
+		};
+		5FA56F9A2CEF164C00245123 /* Waveform */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Waveform;
+		};
 		F1A202C528DEA96C007CD919 /* Waveform */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Waveform;

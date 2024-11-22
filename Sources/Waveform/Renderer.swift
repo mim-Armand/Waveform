@@ -1,3 +1,4 @@
+// Renderer.swift
 // Copyright AudioKit. All Rights Reserved. Revision History at http://github.com/AudioKit/Waveform/
 
 import Foundation
@@ -9,14 +10,11 @@ let MaxBuffers = 3
 
 /// Parameters defining the look and feel of the waveform
 struct Constants {
+    var sampleRate: Double = 44100.0  // Default sample rate
+    var color: Color = .blue
 
-    /// Foreground color
-    var color = SIMD4<Float>(1,1,1,1)
-
-    /// Initialize the Constants structure
-    /// - Parameter color: Foreground color
-    init(color: Color = .white) {
-        self.color = color.components
+    init(color: Color = .blue) {
+        self.color = color
     }
 }
 
@@ -24,23 +22,42 @@ class Renderer: NSObject, MTKViewDelegate {
     var device: MTLDevice!
     var queue: MTLCommandQueue!
     var pipeline: MTLRenderPipelineState!
-    var source = ""
     public var constants = Constants()
+    var commandQueue: MTLCommandQueue
+    var pipelineState: MTLRenderPipelineState
+    var samples: SampleBuffer?
+    var start: Int = 0
+    var length: Int = 0
+    var currentSampleIndex: Int?  // Added to handle the red indicator position
 
     private let inflightSemaphore = DispatchSemaphore(value: MaxBuffers)
 
     var minBuffers: [MTLBuffer] = []
     var maxBuffers: [MTLBuffer] = []
 
-    var samples = SampleBuffer(samples: [0])
-    var start = 0
-    var length = 0
-
     init(device: MTLDevice) {
         self.device = device
+        self.commandQueue = device.makeCommandQueue()!
         queue = device.makeCommandQueue()
 
-        let library = try! device.makeDefaultLibrary(bundle: Bundle.module)
+        //        let library = device.makeDefaultLibrary()!
+        guard let library = try? device.makeDefaultLibrary(bundle: .module)
+        else {
+            fatalError(
+                "Failed to load Metal library from the Waveform package.")
+        }
+        let vertexFunction = library.makeFunction(name: "vertex_main")!
+        let fragmentFunction = library.makeFunction(name: "fragment_main")!
+
+        let pipelineDescriptor = MTLRenderPipelineDescriptor()
+        pipelineDescriptor.vertexFunction = vertexFunction
+        pipelineDescriptor.fragmentFunction = fragmentFunction
+        pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+        pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
+
+        self.pipelineState = try! device.makeRenderPipelineState(
+            descriptor: pipelineDescriptor)
+        self.constants = Constants()  // Defaults to ensure compatibility
 
         let rpd = MTLRenderPipelineDescriptor()
         rpd.vertexFunction = library.makeFunction(name: "waveform_vert")
@@ -59,6 +76,9 @@ class Renderer: NSObject, MTKViewDelegate {
         minBuffers = [device.makeBuffer([0])!]
         maxBuffers = [device.makeBuffer([0])!]
 
+        print("minBuffers count: \(minBuffers.count)")
+        print("maxBuffers count: \(maxBuffers.count)")
+
         super.init()
     }
 
@@ -73,28 +93,31 @@ class Renderer: NSObject, MTKViewDelegate {
             level += 1
         }
 
-        // Use optional binding to safely access last element of each array
-        if let minBufferLast = minBuffers.last, let maxBufferLast = maxBuffers.last {
+        if let minBufferLast = minBuffers.last,
+            let maxBufferLast = maxBuffers.last
+        {
             return (minBufferLast, maxBufferLast)
         } else {
-            // If either array is empty, return nil
             return (nil, nil)
         }
     }
-    
-    func encode(to commandBuffer: MTLCommandBuffer,
-                pass: MTLRenderPassDescriptor,
-                width: CGFloat)
-    {
-        pass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0)
 
-        let highestResolutionCount = Float(samples.samples.count)
+    func encode(
+        to commandBuffer: MTLCommandBuffer,
+        pass: MTLRenderPassDescriptor,
+        width: CGFloat
+    ) {
+        pass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1.0)
+        
+        print("Number of samples during encoding: \(samples?.samples.count ?? 0)")
+
+        let highestResolutionCount = Float(samples?.samples.count ?? 0)
         let startFactor = Float(start) / highestResolutionCount
         let lengthFactor = Float(length) / highestResolutionCount
 
-        let (minBufferOpt, maxBufferOpt) = selectBuffers(width: width / CGFloat(lengthFactor))
+        let (minBufferOpt, maxBufferOpt) = selectBuffers(
+            width: width / CGFloat(lengthFactor))
         guard let minBuffer = minBufferOpt, let maxBuffer = maxBufferOpt else {
-            //early return to gracefully fail.
             return
         }
 
@@ -105,10 +128,12 @@ class Renderer: NSObject, MTKViewDelegate {
         let bufferStart = Int(bufferLength * startFactor)
         var bufferCount = Int(bufferLength * lengthFactor)
 
-        enc.setFragmentBuffer(minBuffer, offset: bufferStart * MemoryLayout<Float>.size, index: 0)
-        enc.setFragmentBuffer(maxBuffer, offset: bufferStart * MemoryLayout<Float>.size, index: 1)
-        assert(minBuffer.length == maxBuffer.length)
-        enc.setFragmentBytes(&bufferCount, length: MemoryLayout<Int32>.size, index: 2)
+        enc.setFragmentBuffer(
+            minBuffer, offset: bufferStart * MemoryLayout<Float>.size, index: 0)
+        enc.setFragmentBuffer(
+            maxBuffer, offset: bufferStart * MemoryLayout<Float>.size, index: 1)
+        enc.setFragmentBytes(
+            &bufferCount, length: MemoryLayout<Int32>.size, index: 2)
         let c = [constants]
         enc.setFragmentBytes(c, length: MemoryLayout<Constants>.size, index: 3)
         enc.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
@@ -116,48 +141,83 @@ class Renderer: NSObject, MTKViewDelegate {
     }
 
     func draw(in view: MTKView) {
+        guard let drawable = view.currentDrawable, let samples = samples else {
+            print("Samples are nil or drawable is missing")
+            return
+        }
+        
+        print("Number of samples in draw: \(samples.samples.count)")
+
+
+        let commandBuffer = commandQueue.makeCommandBuffer()!
+        let renderPassDescriptor = view.currentRenderPassDescriptor!
+
+        let renderEncoder = commandBuffer.makeRenderCommandEncoder(
+            descriptor: renderPassDescriptor)!
+        renderEncoder.setRenderPipelineState(pipelineState)
+
         let size = view.frame.size
         let w = Float(size.width)
         let h = Float(size.height)
-        // let scale = Float(view.contentScaleFactor)
 
         if w == 0 || h == 0 {
             return
         }
 
-        // use semaphore to encode 3 frames ahead
         _ = inflightSemaphore.wait(timeout: DispatchTime.distantFuture)
-
-        let commandBuffer = queue.makeCommandBuffer()!
 
         let semaphore = inflightSemaphore
         commandBuffer.addCompletedHandler { _ in
             semaphore.signal()
         }
 
-        if let renderPassDescriptor = view.currentRenderPassDescriptor, let currentDrawable = view.currentDrawable {
-            encode(to: commandBuffer, pass: renderPassDescriptor, width: size.width)
-
-            commandBuffer.present(currentDrawable)
+        if let currentSampleIndex = currentSampleIndex {
+            drawRedIndicator(
+                at: currentSampleIndex, in: renderEncoder, view: view)
         }
+
+        renderEncoder.endEncoding()
+        commandBuffer.present(drawable)
         commandBuffer.commit()
     }
 
-    func set(samples: SampleBuffer, start: Int, length: Int) {
+    func drawRedIndicator(
+        at sampleIndex: Int, in renderEncoder: MTLRenderCommandEncoder,
+        view: MTKView
+    ) {
+        // Implement red line drawing at `sampleIndex`
+        // This function will need logic to translate the `sampleIndex` to a screen X position
+    }
+
+    func set(
+        samples: SampleBuffer, start: Int, length: Int,
+        currentTime: TimeInterval? = nil
+    ) {
+        self.samples = samples
         self.start = start
         self.length = length
-        if samples === self.samples {
-            return
+        
+        print("Number of samples set: \(samples.samples.count)")
+        
+        if let currentTime = currentTime {
+            self.currentSampleIndex = calculateSampleIndex(for: currentTime)
+        } else {
+            self.currentSampleIndex = nil
         }
-        self.samples = samples
+    }
 
-        let buffers = makeBuffers(device: device, samples: samples)
-        self.minBuffers = buffers.0
-        self.maxBuffers = buffers.1
+    func calculateSampleIndex(for currentTime: TimeInterval) -> Int {
+        guard let samples = samples else { return 0 }
+        let totalSamples = samples.samples.count
+        let sampleRate = constants.sampleRate
+        let totalDuration = Double(totalSamples) / sampleRate
+        return Int((currentTime / totalDuration) * Double(totalSamples))
     }
 }
 
-func makeBuffers(device: MTLDevice, samples: SampleBuffer) -> ([MTLBuffer], [MTLBuffer]) {
+func makeBuffers(device: MTLDevice, samples: SampleBuffer) -> (
+    [MTLBuffer], [MTLBuffer]
+) {
     var minSamples = samples.samples
     var maxSamples = samples.samples
 
